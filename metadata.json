@@ -1,0 +1,7 @@
+{
+  "name": "Copy of SchoolHealth Pro",
+  "description": "A comprehensive student health management system featuring an interactive dashboard, medical history tracking, immunization records, and an AI-powered health assistant for school infirmaries.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
