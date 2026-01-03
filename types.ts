@@ -1,4 +1,11 @@
 
+export interface User {
+  username: string;
+  name: string;
+  role: string;
+  lastLogin: string;
+}
+
 export interface Student {
   id: string;
   name: string;

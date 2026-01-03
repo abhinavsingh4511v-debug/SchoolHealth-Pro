@@ -1,12 +1,15 @@
 
 import React from 'react';
+import { User } from '../types';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onLogout: () => void;
+  user: User;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, user }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'students', label: 'Student Directory', icon: '👥' },
@@ -19,7 +22,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     <div className="flex flex-col h-full w-64">
       <div className="p-6 border-b flex-shrink-0">
         <h1 className="text-xl font-bold text-blue-600 flex items-center gap-2 overflow-hidden whitespace-nowrap">
-          <span className="text-2xl">🏥</span> School Health Pro
+          <span className="text-2xl shadow-sm">🏥</span> School Health Pro
         </h1>
       </div>
       
@@ -40,18 +43,24 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
         ))}
       </nav>
 
-      <div className="p-4 border-t flex-shrink-0">
-        <div className="flex items-center gap-3 px-2 py-2 overflow-hidden">
-          <img 
-            src="https://picsum.photos/seed/nurse/40/40" 
-            className="w-10 h-10 rounded-full border border-blue-200 flex-shrink-0" 
-            alt="User" 
-          />
+      <div className="p-4 border-t flex-shrink-0 space-y-3 bg-gray-50/30">
+        <div className="flex items-center gap-3 px-2 py-1 overflow-hidden">
+          <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm flex-shrink-0 bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+            {user.name.charAt(0)}
+          </div>
           <div className="overflow-hidden">
-            <p className="text-xs font-semibold text-gray-900 truncate">Nurse Sarah</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider truncate">Administrator</p>
+            <p className="text-xs font-bold text-gray-900 truncate">{user.name}</p>
+            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider truncate">{user.role}</p>
           </div>
         </div>
+        
+        <button 
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-2 text-red-500 hover:bg-red-50 rounded-xl text-xs font-bold transition-all"
+        >
+          <span className="text-sm">🚪</span>
+          Logout System
+        </button>
       </div>
     </div>
   );

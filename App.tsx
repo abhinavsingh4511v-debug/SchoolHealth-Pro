@@ -6,16 +6,29 @@ import StudentDirectory from './components/StudentDirectory';
 import AIAssistant from './components/AIAssistant';
 import VisitLogs from './components/VisitLogs';
 import Analytics from './components/Analytics';
+import Login from './components/Login';
+import IDScanner from './components/IDScanner';
 import { MOCK_STUDENTS, MOCK_VISITS } from './constants';
-import { Student, VisitRecord } from './types';
+import { Student, VisitRecord, User } from './types';
 
 const STORAGE_KEYS = {
   STUDENTS: 'school_health_pro_students',
   VISITS: 'school_health_pro_visits',
-  USER_PROFILE: 'school_health_pro_profile'
+  USER_PROFILE: 'school_health_pro_profile',
+  AUTH: 'school_health_pro_auth'
 };
 
 const App: React.FC = () => {
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.AUTH);
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [students, setStudents] = useState<Student[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.STUDENTS);
     return saved ? JSON.parse(saved) : MOCK_STUDENTS;
@@ -40,12 +53,16 @@ const App: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannedStudent, setScannedStudent] = useState<Student | null>(null);
+  
   const [notifications, setNotifications] = useState([
-    { id: 1, text: "Welcome to School Health Pro!", time: "Just now", type: "info" }
+    { id: 1, text: "System active and secure.", time: "Just now", type: "info" }
   ]);
 
   const notificationRef = useRef<HTMLDivElement>(null);
 
+  // Persistence Effects
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
   }, [students]);
@@ -58,6 +75,7 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(userProfile));
   }, [userProfile]);
 
+  // Handle outside clicks for notification dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
@@ -68,211 +86,178 @@ const App: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleLogin = (user: User) => {
+    localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(user));
+    setCurrentUser(user);
+    setUserProfile(prev => ({ ...prev, name: user.name }));
+  };
+
+  /**
+   * IMMEDIATE LOGOUT:
+   * Direct state reset and storage removal to force redirect to login screen.
+   */
+  const handleLogout = (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) e.preventDefault();
+    
+    // Immediate storage clearance
+    localStorage.removeItem(STORAGE_KEYS.AUTH);
+    
+    // Trigger UI change by setting currentUser to null
+    setCurrentUser(null);
+    
+    // Clear other UI flags
+    setShowSettings(false);
+    setShowNotifications(false);
+    setIsScannerOpen(false);
+  };
+
   const addStudent = (newStudent: Student) => {
     setStudents(prev => [...prev, newStudent]);
-    addNotification(`New student record created: ${newStudent.name}`);
+    addNotification(`Student added: ${newStudent.name}`);
   };
 
   const deleteStudent = (id: string) => {
-    if (confirm('Are you sure you want to remove this student? This will also remove their visit history.')) {
+    if (confirm('Delete student record?')) {
       setStudents(prev => prev.filter(s => s.id !== id));
       setVisits(prev => prev.filter(v => v.studentId !== id));
-      addNotification(`Student record deleted.`);
     }
   };
 
   const addVisit = (newVisit: VisitRecord) => {
     setVisits(prev => [newVisit, ...prev]);
-    const student = students.find(s => s.id === newVisit.studentId);
-    addNotification(`Visit logged for ${student?.name || 'student'}`);
+    addNotification(`Visit logged.`);
   };
 
   const deleteVisit = (id: string) => {
-    if (confirm('Are you sure you want to delete this visit record?')) {
+    if (confirm('Delete visit record?')) {
       setVisits(prev => prev.filter(v => v.id !== id));
-      addNotification(`Visit record removed.`);
     }
   };
 
   const addNotification = (text: string) => {
-    setNotifications(prev => [{ id: Date.now(), text, time: "Just now", type: "info" }, ...prev].slice(0, 10));
+    setNotifications(prev => [{ id: Date.now(), text, time: "Just now", type: "info" }, ...prev].slice(0, 5));
+  };
+
+  const handleScanSuccess = (student: Student) => {
+    setIsScannerOpen(false);
+    setActiveTab('students');
+    setScannedStudent(student);
   };
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard students={students} visits={visits} />;
-      case 'students':
-        return <StudentDirectory students={students} onAdd={addStudent} onDelete={deleteStudent} />;
-      case 'visits':
-        return <VisitLogs visits={visits} students={students} onAdd={addVisit} onDelete={deleteVisit} />;
-      case 'analytics':
-        return <Analytics students={students} visits={visits} />;
-      case 'ai-assistant':
-        return <AIAssistant />;
-      default:
-        return <Dashboard students={students} visits={visits} />;
+      case 'dashboard': return <Dashboard students={students} visits={visits} />;
+      case 'students': return <StudentDirectory students={students} onAdd={addStudent} onDelete={deleteStudent} initialSelectedStudent={scannedStudent} onClearInitialSelected={() => setScannedStudent(null)} />;
+      case 'visits': return <VisitLogs visits={visits} students={students} onAdd={addVisit} onDelete={deleteVisit} />;
+      case 'analytics': return <Analytics students={students} visits={visits} />;
+      case 'ai-assistant': return <AIAssistant />;
+      default: return <Dashboard students={students} visits={visits} />;
     }
   };
 
+  // REDIRECT TO LOGIN IF NOT AUTHENTICATED
+  if (!currentUser) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar Section */}
-      <div 
-        className={`transition-all duration-300 ease-in-out h-full border-r bg-white shadow-sm flex-shrink-0 relative ${
-          sidebarCollapsed ? 'w-0 overflow-hidden border-none' : 'w-64'
-        }`}
-      >
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <div className={`transition-all duration-300 h-full border-r bg-white shadow-sm flex-shrink-0 relative ${sidebarCollapsed ? 'w-0 overflow-hidden border-none' : 'w-64'}`}>
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} user={currentUser} />
       </div>
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative flex flex-col">
-        <header className="sticky top-0 z-30 glass-morphism h-16 flex items-center justify-between px-6 border-b">
+      <main className="flex-1 overflow-y-auto flex flex-col relative">
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md h-16 flex items-center justify-between px-6 border-b">
           <div className="flex items-center gap-4">
-            {/* Sidebar Toggle Icon */}
             <button 
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-all flex items-center justify-center bg-white border border-gray-200"
-              title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              className="p-2 hover:bg-gray-100 rounded-lg text-gray-400"
             >
-              <span className="text-xl leading-none">{sidebarCollapsed ? '▶' : '◀'}</span>
+              {sidebarCollapsed ? '▶' : '◀'}
             </button>
             <div className="flex flex-col">
-              <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                {activeTab === 'dashboard' ? 'Health Overview' : activeTab.replace('-', ' ')}
+              <h2 className="text-sm font-black text-gray-900 uppercase tracking-tighter">
+                {activeTab.replace('-', ' ')}
               </h2>
-              <span className="text-[10px] text-blue-600 font-bold uppercase truncate max-w-[200px]">
+              <span className="text-[10px] text-blue-600 font-bold uppercase truncate max-w-[150px]">
                 {userProfile.school}
               </span>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">System Active</span>
-            </div>
-            
-            <div className="relative" ref={notificationRef}>
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className={`p-2 rounded-lg transition-colors relative ${showNotifications ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-blue-600'}`}
-              >
-                🔔
-                {notifications.length > 0 && (
-                   <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-                )}
-              </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsScannerOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-100"
+            >
+              📸 Scan
+            </button>
 
+            <div className="relative" ref={notificationRef}>
+              <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors relative">
+                🔔
+                {notifications.length > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>}
+              </button>
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-fadeIn">
-                  <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-sm text-gray-900">Notifications</h3>
-                    <button onClick={() => setNotifications([])} className="text-[10px] text-blue-600 font-bold uppercase hover:underline">Clear All</button>
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-fadeIn">
+                  <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-900 uppercase">Alerts</span>
+                    <button onClick={() => setNotifications([])} className="text-[9px] text-blue-600 font-black uppercase">Clear</button>
                   </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.length > 0 ? notifications.map(n => (
+                  <div className="max-h-60 overflow-y-auto">
+                    {notifications.map(n => (
                       <div key={n.id} className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <p className="text-sm text-gray-800">{n.text}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">{n.time}</p>
+                        <p className="text-xs text-gray-700 font-medium">{n.text}</p>
                       </div>
-                    )) : (
-                      <div className="p-8 text-center text-gray-400 italic text-sm">No new notifications</div>
-                    )}
+                    ))}
                   </div>
                 </div>
               )}
             </div>
 
             <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors">⚙️</button>
+
+            {/* HEADER LOGOUT BUTTON - RED THEME AS REQUESTED */}
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-100"
+            >
+              🚪 Sign Out
+            </button>
           </div>
         </header>
 
-        <div className="p-8 max-w-7xl mx-auto w-full">
+        <div className="p-8 max-w-7xl mx-auto w-full flex-1">
           {renderContent()}
         </div>
 
-        <footer className="mt-auto p-8 border-t bg-white/50 text-center">
-          <p className="text-xs text-gray-400">
-            &copy; 2024 School Health Pro - {userProfile.school}. 
-            Secure Information System.
+        <footer className="p-8 border-t bg-white/50 text-center">
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+            School Health Pro • Secure Environment • {userProfile.school}
           </p>
         </footer>
       </main>
 
-      {/* Settings Modal */}
+      {isScannerOpen && <IDScanner students={students} onScanSuccess={handleScanSuccess} onClose={() => setIsScannerOpen(false)} />}
+      
       {showSettings && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-scaleIn">
-            <div className="p-6 border-b bg-gray-900 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl animate-scaleIn">
+            <div className="p-8 border-b bg-gray-900 text-white flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-bold">System Settings</h3>
-                <p className="text-xs text-gray-400">Manage your account and school preferences</p>
+                <h3 className="text-xl font-black tracking-tighter">System Configuration</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Profile Management</p>
               </div>
-              <button onClick={() => setShowSettings(false)} className="hover:opacity-75 text-2xl">✕</button>
+              <button onClick={() => setShowSettings(false)} className="text-2xl opacity-50 hover:opacity-100 transition-opacity">✕</button>
             </div>
-            <div className="p-8 space-y-6">
+            <div className="p-8 space-y-8">
               <div className="space-y-4">
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">User Profile</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase">Nurse Name</label>
-                    <input 
-                      type="text" 
-                      className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" 
-                      value={userProfile.name}
-                      onChange={(e) => setUserProfile({...userProfile, name: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase">Designation</label>
-                    <input 
-                      type="text" 
-                      className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" 
-                      value={userProfile.role}
-                      onChange={(e) => setUserProfile({...userProfile, role: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase">School Information</label>
-                  <input 
-                    type="text" 
-                    className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" 
-                    value={userProfile.school}
-                    onChange={(e) => setUserProfile({...userProfile, school: e.target.value})}
-                  />
-                </div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nurse Name</label>
+                <input className="w-full px-5 py-3 bg-gray-50 border rounded-2xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500" value={userProfile.name} onChange={e => setUserProfile({...userProfile, name: e.target.value})} />
               </div>
-
-              <div className="space-y-4 pt-4 border-t">
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">App Preferences</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">Email Notifications</p>
-                    <p className="text-xs text-gray-500">Receive weekly health summaries</p>
-                  </div>
-                  <div className="w-12 h-6 bg-blue-600 rounded-full p-1 cursor-pointer">
-                    <div className="w-4 h-4 bg-white rounded-full translate-x-6 transition-transform"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6 flex gap-3">
-                <button 
-                  onClick={() => {
-                    setShowSettings(false);
-                    addNotification("Settings updated successfully");
-                  }}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all"
-                >
-                  Save Changes
-                </button>
-                <button onClick={() => setShowSettings(false)} className="px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-all">Cancel</button>
+              <div className="pt-6 border-t flex flex-col gap-3">
+                <button onClick={() => setShowSettings(false)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all">Save Changes</button>
+                <button onClick={handleLogout} className="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Instant Sign Out</button>
               </div>
             </div>
           </div>

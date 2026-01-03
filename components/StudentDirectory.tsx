@@ -1,14 +1,22 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student } from '../types';
 
 interface StudentDirectoryProps {
   students: Student[];
   onAdd: (student: Student) => void;
   onDelete: (id: string) => void;
+  initialSelectedStudent?: Student | null;
+  onClearInitialSelected?: () => void;
 }
 
-const StudentDirectory: React.FC<StudentDirectoryProps> = ({ students, onAdd, onDelete }) => {
+const StudentDirectory: React.FC<StudentDirectoryProps> = ({ 
+  students, 
+  onAdd, 
+  onDelete, 
+  initialSelectedStudent,
+  onClearInitialSelected
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -26,6 +34,13 @@ const StudentDirectory: React.FC<StudentDirectoryProps> = ({ students, onAdd, on
     reviewComments: '',
     status: 'Healthy' as const
   });
+
+  useEffect(() => {
+    if (initialSelectedStudent) {
+      setSelectedStudent(initialSelectedStudent);
+      if (onClearInitialSelected) onClearInitialSelected();
+    }
+  }, [initialSelectedStudent, onClearInitialSelected]);
 
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
